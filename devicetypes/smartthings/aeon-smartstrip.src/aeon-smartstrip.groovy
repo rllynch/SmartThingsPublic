@@ -12,7 +12,7 @@
  *
  */
 metadata {
-	definition (name: "Aeon SmartStrip", namespace: "smartthings", author: "SmartThings") {
+	definition (name: "Aeon SmartStrip Custom", namespace: "rllynch", author: "Richard L. Lynch") {
 		capability "Switch"
 		capability "Energy Meter"
 		capability "Power Meter"
@@ -122,6 +122,7 @@ def endpointEvent(endpoint, map) {
 }
 
 def zwaveEvent(physicalgraph.zwave.commands.multichannelv3.MultiChannelCmdEncap cmd, ep) {
+	log.debug "MC Cmd Encap ${cmd} ${ep}"
 	def encapsulatedCommand = cmd.encapsulatedCommand([0x32: 3, 0x25: 1, 0x20: 1])
 	if (encapsulatedCommand) {
 		if (encapsulatedCommand.commandClassId == 0x32) {
@@ -142,6 +143,7 @@ def zwaveEvent(physicalgraph.zwave.commands.multichannelv3.MultiChannelCmdEncap 
 }
 
 def zwaveEvent(physicalgraph.zwave.commands.basicv1.BasicReport cmd, endpoint) {
+	log.debug "Basic report ${cmd} ${endpoint}"
 	def map = [name: "switch", type: "physical", value: (cmd.value ? "on" : "off")]
 	def events = [endpointEvent(endpoint, map)]
 	def cmds = []
@@ -149,8 +151,9 @@ def zwaveEvent(physicalgraph.zwave.commands.basicv1.BasicReport cmd, endpoint) {
 		cmds += delayBetween([2,0].collect { s -> encap(zwave.meterV3.meterGet(scale: s), endpoint) }, 1000)
 		if(endpoint < 4) cmds += ["delay 1500", encap(zwave.basicV1.basicGet(), endpoint + 1)]
 	} else if (events[0].isStateChange) {
-		events += (1..4).collect { ep -> endpointEvent(ep, map.clone()) }
-		cmds << "delay 3000"
+		cmds << "delay 1000"
+		cmds += delayBetween((0..4).collect { ep -> encap(zwave.basicV1.basicGet(), ep) }, 800)
+		cmds << "delay 1000"
 		cmds += delayBetween((0..4).collect { ep -> encap(zwave.meterV3.meterGet(scale: 2), ep) }, 800)
 	}
 	if(cmds) events << response(cmds)
@@ -158,6 +161,7 @@ def zwaveEvent(physicalgraph.zwave.commands.basicv1.BasicReport cmd, endpoint) {
 }
 
 def zwaveEvent(physicalgraph.zwave.commands.switchbinaryv1.SwitchBinaryReport cmd, endpoint) {
+	log.debug "Switch binary report ${cmd} ${endpoint}"
 	def map = [name: "switch", value: (cmd.value ? "on" : "off")]
 	def events = [endpointEvent(endpoint, map)]
 	def cmds = []
@@ -199,6 +203,7 @@ def zwaveEvent(physicalgraph.zwave.Command cmd, ep) {
 }
 
 def onOffCmd(value, endpoint = null) {
+	log.debug "SENDING COMMAND TO DEVICE: setting ${endpoint} to ${value}"
 	[
 		encap(zwave.basicV1.basicSet(value: value), endpoint),
 		"delay 500",
